@@ -30,11 +30,13 @@ You need **Node.js 18 or newer**, npm, and an internet connection for OpenSky da
    npm install
    ```
 
-3. Start the development server:
+3. Start the development server (a built-in proxy serves `/api/opensky`, so the Vercel CLI is not needed):
 
    ```sh
-   npx vercel dev
+   npm run dev
    ```
+
+   Optional: put `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` in a `.env` file for higher rate limits. Without them, anonymous OpenSky access is used.
 
 4. Open the local address printed in the terminal.
 

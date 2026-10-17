@@ -1,6 +1,29 @@
-// Vercel function. OpenSky does not answer Vercel's servers, so this asks a relay
-// that runs on a computer OpenSky does answer (see relay/relay.mjs). The relay's
-// public (tunnel) address is stored in the Vercel variable OPENSKY_RELAY_URL.
+let cachedToken = '';
+let tokenExpiresAt = 0;
+
+async function getAccessToken(signal) {
+  const clientId = process.env.OPENSKY_CLIENT_ID;
+  const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
+  if (!clientId || !clientSecret || clientId === 'undefined' || clientSecret === 'undefined') return '';
+  if (cachedToken && Date.now() < tokenExpiresAt) return cachedToken;
+
+  const tokenResponse = await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+    signal,
+  });
+  if (!tokenResponse.ok) throw new Error(`OpenSky authentication failed (${tokenResponse.status})`);
+
+  const tokenData = await tokenResponse.json();
+  cachedToken = tokenData.access_token;
+  tokenExpiresAt = Date.now() + Math.max(0, tokenData.expires_in - 60) * 1000;
+  return cachedToken;
+}
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') {
@@ -8,42 +31,47 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: 'Method not allowed' });
   }
 
-  const relayBase = process.env.OPENSKY_RELAY_URL;
-  if (!relayBase) {
-    return response.status(500).json({ error: 'OPENSKY_RELAY_URL is not set in the Vercel project settings.' });
-  }
-
-  let relayUrl;
-  try {
-    relayUrl = new URL(relayBase);
-  } catch {
-    return response.status(500).json({ error: 'OPENSKY_RELAY_URL is not a valid web address.' });
-  }
+  const upstreamUrl = new URL('https://opensky-network.org/api/states/all');
   for (const parameter of ['lamin', 'lomin', 'lamax', 'lomax']) {
     const value = request.query[parameter];
-    if (typeof value === 'string') relayUrl.searchParams.set(parameter, value);
+    if (typeof value === 'string') upstreamUrl.searchParams.set(parameter, value);
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 13_000); // under the browser's 15 s limit
+  const timeoutId = setTimeout(() => controller.abort(), 25_000);
 
   try {
-    const relayResponse = await fetch(relayUrl, {
-      headers: { Accept: 'application/json' },
+    let accessToken = '';
+    try {
+      accessToken = await getAccessToken(controller.signal);
+    } catch (error) {
+      if (error.message.match(/^OpenSky authentication failed \(\d{3}\)$/) || controller.signal.aborted) {
+        throw error;
+      }
+      console.error('OpenSky authentication server unavailable; retrying anonymously:', error.name, error.message);
+    }
+    const upstreamResponse = await fetch(upstreamUrl, {
+      headers: {
+        Accept: 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       signal: controller.signal,
     });
-    const body = await relayResponse.text();
-    response.setHeader('Cache-Control', relayResponse.ok ? 's-maxage=10, stale-while-revalidate=30' : 'no-store');
-    response.setHeader('Content-Type', relayResponse.headers.get('content-type') ?? 'application/json');
-    return response.status(relayResponse.status).send(body);
+    const body = await upstreamResponse.text();
+    response.setHeader('Cache-Control', upstreamResponse.ok ? 's-maxage=10, stale-while-revalidate=30' : 'no-store');
+    response.setHeader('Content-Type', upstreamResponse.headers.get('content-type') ?? 'application/json');
+    return response.status(upstreamResponse.status).send(body);
   } catch (error) {
     const timedOut = error.name === 'AbortError';
-    console.error('Relay request failed:', error.name, error.message, error.cause?.message ?? '');
+    const authenticationFailure = error.message.match(/^OpenSky authentication failed \((\d{3})\)$/);
+    const errorMessage = timedOut
+      ? 'OpenSky request timed out. Try again later.'
+      : authenticationFailure
+      ? `OpenSky authentication failed (${authenticationFailure[1]}). Check OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET.`
+      : `Server could not connect to OpenSky (${error.cause?.code ?? error.message}). Check your internet connection or firewall.`;
+    console.error('OpenSky proxy request failed:', error.name, error.message, error.cause?.message ?? '');
     return response.status(timedOut ? 504 : 502).json({
-      error: timedOut
-        ? 'The OpenSky relay did not answer in time. Is the relay and tunnel running on the host computer?'
-        : 'Could not reach the OpenSky relay. Is the relay and tunnel running on the host computer?',
-      detail: `${error.name}: ${error.message}`,
+      error: errorMessage,
     });
   } finally {
     clearTimeout(timeoutId);

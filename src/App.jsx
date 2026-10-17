@@ -117,11 +117,16 @@ function App() {
           cache: 'no-store',
           signal: activeController.signal,
         });
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!contentType.includes('json')) {
+          throw new Error('The /api/opensky proxy is not running. Start the app with "npm run dev" (or "vercel dev").');
+        }
         if (!response.ok) {
           if (response.status === 429) {
             throw new Error('OpenSky rate limit reached. Please wait before trying again.');
           }
-          throw new Error(`OpenSky returned an error (${response.status}). Please try again later.`);
+          const details = await response.json().catch(() => ({}));
+          throw new Error(details.error ?? `OpenSky returned an error (${response.status}). Please try again later.`);
         }
 
         const data = await response.json();
@@ -162,7 +167,7 @@ function App() {
         const message = requestTimedOut
           ? 'OpenSky request timed out after 15 seconds.'
           : requestError instanceof TypeError
-          ? 'Could not reach OpenSky through the local proxy. Check your internet connection and try again.'
+          ? 'Could not reach the app server. Make sure "npm run dev" is running, then try again.'
           : requestError.message;
         const errorMessage = message || 'Unable to reach OpenSky. Check your connection and try again.';
         setError(errorMessage);
