@@ -41,7 +41,15 @@ export default async function handler(request, response) {
   const timeoutId = setTimeout(() => controller.abort(), 25_000);
 
   try {
-    const accessToken = await getAccessToken(controller.signal);
+    let accessToken = '';
+    try {
+      accessToken = await getAccessToken(controller.signal);
+    } catch (error) {
+      if (error.message.match(/^OpenSky authentication failed \(\d{3}\)$/) || controller.signal.aborted) {
+        throw error;
+      }
+      console.error('OpenSky authentication server unavailable; retrying anonymously:', error.name, error.message);
+    }
     const upstreamResponse = await fetch(upstreamUrl, {
       headers: {
         Accept: 'application/json',
