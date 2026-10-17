@@ -38,7 +38,7 @@ export default async function handler(request, response) {
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25_000);
+  const timeoutId = setTimeout(() => controller.abort(), 12_000);
 
   try {
     let accessToken = '';
@@ -71,8 +71,9 @@ export default async function handler(request, response) {
       : 'Vercel could not connect to OpenSky. Check the function logs.';
     console.error('OpenSky proxy request failed:', error.name, error.message, error.cause?.message ?? '');
     return response.status(timedOut ? 504 : 502).json({
-      error: errorMessage,
-    });
+  error: errorMessage,
+  detail: `${error.name}: ${error.message} | ${error.cause?.code ?? ''} ${error.cause?.message ?? ''}`,
+});
   } finally {
     clearTimeout(timeoutId);
   }
