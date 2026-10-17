@@ -4,7 +4,7 @@ import { combineAircraftUpdates, convertStateVector, getRetryDelayMs, isAircraft
 import { readAircraftCache, saveAircraftCache } from './data/cache.js';
 import { getPollingIntervalMinutes, regions } from './data/regions.js';
 
-const AIRCRAFT_DATA_URL = '/api/aircraft';
+const OPEN_SKY_URL = '/api/opensky';
 const TABLE_PAGE_SIZE = 15;
 
 function formatNumber(value, digits = 0) {
@@ -109,23 +109,19 @@ function App() {
       timeoutId = window.setTimeout(() => {
         requestTimedOut = true;
         activeController.abort();
-      }, 25_000);
+      }, 15_000);
 
       const query = new URLSearchParams(region.bounds);
       try {
-        const response = await fetch(`${AIRCRAFT_DATA_URL}?${query.toString()}`, {
+        const response = await fetch(`${OPEN_SKY_URL}?${query.toString()}`, {
+          cache: 'no-store',
           signal: activeController.signal,
         });
         if (!response.ok) {
           if (response.status === 429) {
-            throw new Error('Aircraft data rate limit reached. Please wait before trying again.');
+            throw new Error('OpenSky rate limit reached. Please wait before trying again.');
           }
-          let message = `Aircraft data service returned an error (${response.status}). Please try again later.`;
-          try {
-            const errorData = await response.json();
-            if (typeof errorData.error === 'string') message = errorData.error;
-          } catch {}
-          throw new Error(message);
+          throw new Error(`OpenSky returned an error (${response.status}). Please try again later.`);
         }
 
         const data = await response.json();
@@ -164,11 +160,11 @@ function App() {
         if (stopped || (requestError.name === 'AbortError' && !requestTimedOut)) return;
         consecutiveFailures += 1;
         const message = requestTimedOut
-          ? 'Aircraft data request timed out after 25 seconds.'
+          ? 'OpenSky request timed out after 15 seconds.'
           : requestError instanceof TypeError
-          ? 'Could not reach the aircraft data service. Try again later.'
+          ? 'Could not reach OpenSky through the local proxy. Check your internet connection and try again.'
           : requestError.message;
-        const errorMessage = message || 'Unable to load aircraft data. Try again later.';
+        const errorMessage = message || 'Unable to reach OpenSky. Check your connection and try again.';
         setError(errorMessage);
         setUpdateHistory((history) => [{
           id: `${Date.now()}-${Math.random()}`,
@@ -302,7 +298,7 @@ function App() {
 
           {activeView === 'overview' && <>
           <section className="stats-grid" aria-label="Aircraft statistics">
-            <StatCard label="Aircraft in region" value={isLoading ? '…' : formatNumber(currentAircraft.length)} note="Current ADSB.lol response" icon="✈" accent="blue"/>
+            <StatCard label="Aircraft in region" value={isLoading ? '…' : formatNumber(currentAircraft.length)} note="Current OpenSky response" icon="✈" accent="blue"/>
             <StatCard label="Aircraft on ground" value={isLoading ? '…' : formatNumber(currentAircraft.filter((plane) => plane.onGround === true).length)} note="In selected region" icon="◎" accent="green"/>
             <StatCard label="Avg. altitude" value={isLoading ? '…' : averageAltitude === null ? '—' : `${formatNumber(averageAltitude)} ft`} note="Aircraft with altitude reports" icon="↟" accent="purple"/>
             <StatCard label="Avg. ground speed" value={isLoading ? '…' : averageSpeed === null ? '—' : `${formatNumber(averageSpeed)} kts`} note="Aircraft with speed reports" icon="⌁" accent="orange"/>
@@ -330,7 +326,7 @@ function App() {
 
           {activeView !== 'aircraft' && <section className={`map-card ${activeView === 'map' ? 'map-view' : ''}`} id="map">
             <div className="section-heading">
-              <div><h2>Live air traffic</h2><p>ADSB.lol-received positions across {region.name}</p></div>
+              <div><h2>Live air traffic</h2><p>OpenSky-received positions across {region.name}</p></div>
             </div>
             <div className="map-wrap">
               <MapContainer key={regionKey} center={region.center} zoom={region.zoom} scrollWheelZoom preferCanvas className="traffic-map">
@@ -352,7 +348,7 @@ function App() {
               </MapContainer>
               <div className="map-legend"><span><i className="legend-dot"/>Recent report</span><span><i className="legend-stale"/>Stale report (&gt;2 min)</span><span><i className="legend-ring"/>Selected</span></div>
               <div className="map-scale">100 km</div>
-              {isLoading && <div className="map-message">Loading aircraft from ADSB.lol…</div>}
+              {isLoading && <div className="map-message">Loading aircraft from OpenSky…</div>}
               {!isLoading && !error && mapAircraft.length === 0 && <div className="map-message empty-message">
                 <strong>{currentAircraft.length === 0 ? 'No aircraft positions returned for this region.' : 'Filters are hiding the aircraft.'}</strong>
                 {currentAircraft.length > 0 && <button onClick={clearFilters}>Clear filters</button>}
@@ -369,7 +365,7 @@ function App() {
           <section className="bottom-grid">
             <div className="panel aircraft-panel" id="fleet">
               <div className="section-heading compact">
-                <div><h2>Aircraft in region</h2><p>Current and recently departed ADSB.lol reports</p></div>
+                <div><h2>Aircraft in region</h2><p>Current and recently departed OpenSky reports</p></div>
                 <button className="text-button" onClick={() => setRefreshRequest((count) => count + 1)} disabled={isLoading || isRefreshing}>Refresh <b>↻</b></button>
               </div>
               <div className="table-filters">
@@ -456,7 +452,7 @@ function App() {
               </li>)}</ol>}
           </section>
           </>}
-          <footer className="page-footer"><span>© 2026 Airspace Intelligence</span><span>Live position data: <a href="https://www.adsb.lol" target="_blank" rel="noreferrer">ADSB.lol</a></span></footer>
+          <footer className="page-footer"><span>© 2026 Airspace Intelligence</span><span>Live position data: OpenSky Network</span></footer>
         </div>
       </section>
     </main>
