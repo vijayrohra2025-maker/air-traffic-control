@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/opensky.js": {
-      "regions": ["iad1"],
+      "regions": ["lhr1"],
       "maxDuration": 30
     }
   },
