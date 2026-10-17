@@ -122,7 +122,12 @@ function App() {
           if (response.status === 429) {
             throw new Error('OpenSky rate limit reached. Please wait before trying again.');
           }
-          throw new Error(`OpenSky returned an error (${response.status}). Please try again later.`);
+          let message = `OpenSky returned an error (${response.status}). Please try again later.`;
+          try {
+            const errorData = await response.json();
+            if (typeof errorData.error === 'string') message = errorData.error;
+          } catch {}
+          throw new Error(message);
         }
 
         const data = await response.json();

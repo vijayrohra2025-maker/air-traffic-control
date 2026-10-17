@@ -55,8 +55,15 @@ export default async function handler(request, response) {
     return response.status(upstreamResponse.status).send(body);
   } catch (error) {
     const timedOut = error.name === 'AbortError';
+    const authenticationFailure = error.message.match(/^OpenSky authentication failed \((\d{3})\)$/);
+    const errorMessage = timedOut
+      ? 'OpenSky request timed out. Try again later.'
+      : authenticationFailure
+      ? `OpenSky authentication failed (${authenticationFailure[1]}). Check the Vercel client ID and secret.`
+      : 'Vercel could not connect to OpenSky. Check the function logs.';
+    console.error('OpenSky proxy request failed:', error.name, error.message, error.cause?.message ?? '');
     return response.status(timedOut ? 504 : 502).json({
-      error: timedOut ? 'OpenSky request timed out' : 'Could not reach OpenSky',
+      error: errorMessage,
     });
   } finally {
     clearTimeout(timeoutId);
