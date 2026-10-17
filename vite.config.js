@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/opensky-api': {
+      '/api/opensky': {
         target: 'https://opensky-network.org',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/opensky-api/, '/api'),
+        rewrite: () => '/api/states/all',
       },
     },
   },

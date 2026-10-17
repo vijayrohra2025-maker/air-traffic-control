@@ -4,7 +4,7 @@ import { combineAircraftUpdates, convertStateVector, getRetryDelayMs, isAircraft
 import { readAircraftCache, saveAircraftCache } from './data/cache.js';
 import { getPollingIntervalMinutes, regions } from './data/regions.js';
 
-const OPEN_SKY_URL = '/opensky-api/states/all';
+const OPEN_SKY_URL = '/api/opensky';
 const TABLE_PAGE_SIZE = 15;
 
 function formatNumber(value, digits = 0) {
