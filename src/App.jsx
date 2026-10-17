@@ -4,7 +4,7 @@ import { combineAircraftUpdates, convertStateVector, getRetryDelayMs, isAircraft
 import { readAircraftCache, saveAircraftCache } from './data/cache.js';
 import { getPollingIntervalMinutes, regions } from './data/regions.js';
 
-const OPEN_SKY_URL = '/api/opensky';
+const OPEN_SKY_URL = 'https://opensky-network.org/api/states/all';
 const TABLE_PAGE_SIZE = 15;
 
 function formatNumber(value, digits = 0) {
@@ -113,7 +113,6 @@ function App() {
 
       const query = new URLSearchParams(region.bounds);
       try {
-        // The Vite proxy keeps this API request on the same origin as the dashboard.
         const response = await fetch(`${OPEN_SKY_URL}?${query.toString()}`, {
           cache: 'no-store',
           signal: activeController.signal,
@@ -168,7 +167,7 @@ function App() {
         const message = requestTimedOut
           ? 'OpenSky request timed out after 15 seconds.'
           : requestError instanceof TypeError
-          ? 'Could not reach OpenSky through the local proxy. Check your internet connection and try again.'
+          ? 'Could not reach OpenSky. Check your internet connection and try again.'
           : requestError.message;
         const errorMessage = message || 'Unable to reach OpenSky. Check your connection and try again.';
         setError(errorMessage);

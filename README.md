@@ -42,19 +42,19 @@ To stop the server, press `Ctrl+C` in the terminal.
 
 ## How the data gets to the screen
 
-1. The browser asks `/api/opensky` for aircraft reports inside the Western Europe bounding box.
-2. During development, `vite.config.js` forwards that request to OpenSky. On Vercel, `api/opensky.js` proxies the request and `vercel.json` configures the function timeout.
+1. The browser requests aircraft reports directly from OpenSky for the Western Europe bounding box.
+2. Requests are anonymous and use the visitor's IP-based OpenSky allowance. This avoids routing requests through Vercel, whose function network could not connect to OpenSky.
 3. `src/data/aircraft.js` converts OpenSky's positional arrays into named aircraft fields and converts altitude and speed into feet and knots.
 4. `src/App.jsx` keeps the aircraft snapshot and interface state, including selected aircraft, filters, alerts, loading status, and errors.
 5. React renders the resulting data in the map, statistics, and aircraft table. The Leaflet map uses OpenStreetMap tiles for its background.
 
-There is **no database**. A small Vercel serverless function proxies OpenSky requests in production, while the Vite development server proxies them locally. The browser stores a small versioned snapshot in `localStorage`, so it can show the last successful data while it tries to refresh. That saved data is local to the browser and is not a shared history service.
+There is **no database**. The browser stores a small versioned snapshot in `localStorage`, so it can show the last successful data while it tries to refresh. That saved data is local to the browser and is not a shared history service.
 
 ## Data freshness, errors, and request limits
 
 - A report with no contact for more than two minutes is marked **stale**. A small clock updates its visible age between API polls.
 - Requests time out after 15 seconds. Failed requests are retried with increasing delays, up to five minutes. The dashboard keeps the last successful results and displays an error instead of treating a failed request as an empty region.
-- Polling is intentionally limited to about once every 15 minutes to reduce API usage. OpenSky quotas and bounding-box costs can change, so check the [OpenSky REST API documentation](https://openskynetwork.github.io/opensky-api/rest.html) before changing the interval.
+- Polling is intentionally limited to about once every 15 minutes to reduce anonymous API usage. OpenSky quotas and bounding-box costs can change, so check the [OpenSky REST API documentation](https://openskynetwork.github.io/opensky-api/rest.html) before changing the interval. Anonymous access has lower limits than authenticated access.
 - Each aircraft keeps up to 12 distinct reported positions in local storage. A dashed track is shown only when there are at least two positions. This is not a complete flight-history archive, and the app does not predict future positions.
 - OpenSky coverage is incomplete and varies by location. A blank part of the map does **not** prove no aircraft are there. Callsigns or other fields may also be missing. See the [OpenSky FAQ](https://opensky-network.org/about/faq) for coverage information.
 
@@ -74,7 +74,7 @@ There is **no database**. A small Vercel serverless function proxies OpenSky req
 - `src/data/cache.js` saves and reads the browser's last successful snapshot.
 - `src/data/*.test.js` contains automated tests for aircraft conversion, merging, retry behavior, and caching.
 - `src/dashboard.css` contains all app-specific styles and responsive layout rules.
-- `vite.config.js` configures the local OpenSky development proxy; `api/opensky.js` proxies production requests; `vercel.json` configures the function timeout and page fallback on Vercel.
+- `api/opensky.js` contains the earlier server-side proxy implementation; the dashboard now requests OpenSky directly from the browser.
 
 ## Check and build the project
 
@@ -98,8 +98,8 @@ Vite writes the production files to `dist/`. Unit tests check the app's data-han
 1. Push this project to a GitHub repository.
 2. In Vercel, choose **Add New → Project** and import that repository.
 3. Use `npm run build` for the build command and `dist` for the output directory if Vercel does not detect them automatically.
-4. Deploy. Vercel runs `api/opensky.js` for `/api/opensky` requests and serves the app from `index.html`.
+4. Deploy. The static app is served from `index.html`; the browser requests OpenSky directly.
 
-For another static host, configure an equivalent external API proxy and single-page-app fallback. The development proxy in `vite.config.js` is not included in the built files.
+For another static host, configure its single-page-app fallback as needed. No API proxy is required.
 
-For better OpenSky request allowances, create an API client in your OpenSky account and add `OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET` under **Vercel → Project Settings → Environment Variables**, then redeploy. The serverless function uses OAuth when both values exist and falls back to anonymous access otherwise. Keep these values server-side; never add them to frontend code or commit them to Git. Review OpenSky's current terms and quotas before publishing a public deployment. This dashboard is for learning and demonstration only; do not use it for operational or safety-critical decisions.
+The dashboard uses anonymous OpenSky access from each visitor's browser. Do not add the OpenSky client secret to frontend code. Review OpenSky's current terms and quotas before publishing a public deployment. This dashboard is for learning and demonstration only; do not use it for operational or safety-critical decisions.
